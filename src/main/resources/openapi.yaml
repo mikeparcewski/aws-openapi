@@ -1,0 +1,175 @@
+openapi: "3.0.1"
+info:
+  title: "Simple Items API"
+  description: "Simple items CRUD for demo"
+  version: "1.0"
+paths:
+  /item/{id}:
+    get:
+      summary: "Get an by id"
+      tags:
+        - Operations
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "200 response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+    delete:
+      summary: "Delete an item by id"
+      tags:
+        - Operations
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "200 response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Changed"
+    put:
+      summary: "Update an item"
+      tags:
+        - Operations
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "200 response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+  /item/:
+    post:
+      summary: "Create an item"
+      tags:
+        - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Item"
+        required: true
+      responses:
+        "200":
+          description: "200 response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Changed"
+  /items/:
+    get:
+      summary: "Get a list of items"
+      tags:
+        - Operations
+      responses:
+        "200":
+          description: "200 response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Results"
+components:
+  schemas:
+    Item:
+      type: "object"
+      required:
+        - "name"
+        - "description"
+        - "labels"
+      properties:
+        id:
+          type: "string"
+          description: "The id of the item"
+          format: "byte"
+          readOnly: true
+        name:
+          type: "string"
+          description: "The item name"
+          pattern: '^[A-Za-z0-9\-\_]+$'
+        description:
+          type: "string"
+          description: "Description of the item"
+          minLength: 5
+          maxLength: 250
+        creationDt:
+          type: "string"
+          description: "Creation date of the item"
+          format: "date-time"
+        active:
+          type: "boolean"
+          description: "Is item active?"
+          nullable: true
+        labels:
+          type: "array"
+          uniqueItems: true
+          items:
+            type: "string"
+            enum:
+              - "used"
+              - "new"
+              - "like new"
+              - "broken"
+              - "lightly used"
+        rating:
+          type: number
+          minimum: 0
+          maximum: 5
+          exclusiveMinimum: true
+        price:
+          type: integer
+          multipleOf: 5
+        stores:
+          type: "array"
+          description: "Associated stores"
+          items:
+            $ref: "#/components/schemas/Store"
+    Store:
+      type: "object"
+      description: "A store"
+      required:
+        - "name"
+        - "id"
+      properties:
+        id:
+          type: "string"
+          description: "The id of the item"
+          format: "byte"
+        name:
+          type: "string"
+          description: "The item name"
+          pattern: '^[A-Za-z0-9\s]+$'
+        about:
+          type: "string"
+          maxLength: 250
+    Results:
+      type: "array"
+      description: "Collection of items"
+      items:
+        $ref: "#/components/schemas/Item"
+    Changed:
+      required:
+        - "id"
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          description: "The id of the resource"
+      description: "Response for successful transfer creation/deletion/update"

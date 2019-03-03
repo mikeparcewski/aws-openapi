@@ -1,0 +1,436 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Serverless Microservice using API Gateway, AWS Lambda and DynamoDB configured via OpenAPI 3.0
+
+Resources:
+
+  ######
+  ## dynamodb setup
+  ##
+
+  ## the actual table
+  ItemsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ItemsExampleTable
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: "NEW_AND_OLD_IMAGES"
+
+  ## the role that allows for scaling
+  ScalingRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                -
+                  "application-autoscaling.amazonaws.com"
+            Action:
+              -
+                "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:UpdateTable"
+                  - "cloudwatch:PutMetricAlarm"
+                  - "cloudwatch:DescribeAlarms"
+                  - "cloudwatch:GetMetricStatistics"
+                  - "cloudwatch:SetAlarmState"
+                  - "cloudwatch:DeleteAlarms"
+                Resource: "*"
+
+  ## the scaling configuration for writes
+  WriteCapacityScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 15
+      MinCapacity: 5
+      ResourceId: !Join
+        - /
+        - - table
+          - !Ref ItemsTable
+      RoleARN: !GetAtt ScalingRole.Arn
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+
+  ## the actual scaling policy for writes
+  WriteScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: WriteAutoScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref WriteCapacityScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 50.0
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+
+  ## the scaling configuration for reads
+  ReadScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: 5
+      MaxCapacity: 10
+      ResourceId: !Join
+        - /
+        - - table
+          - !Ref ItemsTable
+      RoleARN: !GetAtt ScalingRole.Arn
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+
+  ## the actual policy for reads
+  ReadScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: TableReadScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ReadScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 75
+
+  ## create a stream from the table to our lambda
+  DataTableStream:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      Enabled: True
+      EventSourceArn:
+        Fn::GetAtt: [ ItemsTable , StreamArn ]
+      FunctionName:
+        Fn::GetAtt: [ HandleDynamoEvent , Arn ]
+      StartingPosition: LATEST
+
+  ######
+  ## the lambda configuration
+  ##
+
+  LambdaBasicExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+            Condition: {}
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDB
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:ListStreams
+                  - dynamodb:DescribeStream
+                  - dynamodb:GetShardIterator
+                  - dynamodb:GetRecords
+                  - sns:*
+                Resource:
+                  - '*'
+
+  ## saves data to dynamo
+  SaveToDynamo:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: "Handles saving JSON to Dynamo"
+      Handler: index.handler
+      Role: !GetAtt 'LambdaBasicExecutionRole.Arn'
+      Code:
+        ZipFile: !Sub |
+          'use strict';
+
+          var AWS = require('aws-sdk'),
+          uuid = require('uuid'),
+          documentClient = new AWS.DynamoDB.DocumentClient();
+
+          exports.handler = function(event, context, callback){
+
+            var json = JSON.parse(event.body);
+            json.id = uuid.v1();
+
+            var params = {
+              Item : json,
+              TableName : "${ItemsTable}"
+            };
+
+            documentClient.put(params, function(err, data){
+
+              if (err) {
+                callback(err, data);
+                return;
+              }
+
+              var response = {
+                "statusCode": 200,
+                "body": JSON.stringify({ "id": params.Item.id }),
+                "isBase64Encoded": false
+              };
+
+              callback(null, response);
+
+            });
+          }
+      Runtime: nodejs8.10
+
+  ## transforms DynamoDB json to normal JSON
+  DynamoToJSON:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: "Handles converting Dyanmo to JSON"
+      Handler: index.handler
+      Role: !GetAtt 'LambdaBasicExecutionRole.Arn'
+      MemorySize: 128
+      Code:
+        ZipFile: !Sub |
+          'use strict';
+
+          var AWS = require('aws-sdk'),
+          documentClient = new AWS.DynamoDB.DocumentClient();
+
+          exports.handler = function(event, context, callback){
+
+            var params = {
+              TableName : "${ItemsTable}"
+            };
+
+            if ("pathParameters" in event && event.pathParameters != null && "id" in event.pathParameters) {
+              params.Key = {
+                "id": event.pathParameters.id
+              }
+            }
+
+            var action = params.hasOwnProperty("Key") ? "get" : "scan";
+
+            documentClient[action](params, function(err, data){
+
+              if (err) {
+                callback(err, data);
+                return;
+              }
+
+              var resData = data.hasOwnProperty("Item") ? data.Item : data.Items;
+
+              var response = {
+                "statusCode": 200,
+                "body": JSON.stringify(resData),
+                "isBase64Encoded": false
+              };
+
+              callback(null, response);
+
+            });
+          }
+      Runtime: nodejs8.10
+
+  ## handles update of fields
+  DynamoJSONUpdate:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: "Handles updating Dynamo with JSON"
+      Handler: index.handler
+      Role: !GetAtt 'LambdaBasicExecutionRole.Arn'
+      MemorySize: 128
+      Code:
+        ZipFile: !Sub |
+          'use strict';
+
+          var AWS = require("aws-sdk"),
+          parse = AWS.DynamoDB.Converter.input,
+          documentClient = new AWS.DynamoDB.DocumentClient();
+
+          exports.handler = function(event, context, callback) {
+
+            var val = flatten(JSON.parse(event.body));
+            var ue = getUpdateExpression(val);
+
+            var params = {
+              TableName: "${ItemsTable}",
+              Key:{
+                id: event.pathParameters.id
+              },
+              UpdateExpression: ue.exp,
+              ExpressionAttributeValues: ue.vals,
+              ExpressionAttributeNames: ue.names,
+              ReturnValues : "UPDATED_NEW"
+            };
+
+            documentClient.update(params, function(err, data) {
+
+              var response = {
+                statusCode: err ? 400 : 200,
+                body: JSON.stringify(err ? err : data, null, 2),
+                isBase64Encoded: false
+              };
+              callback(null, response);
+
+            });
+          };
+
+          /**
+           * flatten the object like Dynamo likes it
+           */
+          function flatten(obj, path = []) {
+            let output = {};
+            Object.entries(obj).forEach(([ key, value ]) => {
+              const nextPath = [ ...path, key ];
+              if (typeof value !== 'object') {
+                output[nextPath.join('.')] = value;
+                return;
+              }
+              output = {
+                ...output,
+                ...flatten(value, nextPath)
+              };
+            });
+            return output;
+          }
+
+          /**
+           * get the update expression
+           */
+          function getUpdateExpression(flattendJSON) {
+
+            var ret = { exp: "set ", vals: {}, names: {} }, pos = 0;
+
+            Object.entries(flattendJSON).forEach(([ key, value ]) => {
+
+              ret.vals[":val" + pos] = value;
+              key.split(".").map(function(val, idx, arr) {
+                if (idx > 0) ret.exp += ".";
+                var segment = "#a" + pos + "b" + idx;
+                ret.exp += segment;
+                ret.names[segment] = val;
+              });
+              ret.exp += " = :val" + pos + ", ";
+              pos++;
+            });
+
+            ret.exp = ret.exp.substr(0, ret.exp.lastIndexOf(","));
+
+            return ret;
+          }
+      Runtime: nodejs8.10
+
+  ## handles update of fields
+  HandleDynamoEvent:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: "Handles updating Dynamo with JSON"
+      Handler: index.handler
+      Role: !GetAtt 'LambdaBasicExecutionRole.Arn'
+      MemorySize: 128
+      Code:
+        ZipFile: !Sub |
+          'use strict'
+
+          var AWS = require("aws-sdk"),
+          sns = new AWS.SNS();
+
+          exports.handler = function(event, context, callback) {
+
+            sns.publish(
+              {
+                Subject: "Data change evenet",
+                Message: event.Records[0].eventName + " occured in " + event.Records[0].awsRegion,
+                TopicArn: "${ChangeEventTopic}"
+              },
+              function(err, data) {
+                  if (err) {
+                    console.log(err.stack);
+                  }
+                  callback(null,"done");
+                  return;
+              }
+
+            );
+
+          };
+      Runtime: nodejs8.10
+
+  ## create the SNS topic the lambda will publish to
+  ChangeEventTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Demo data change event
+
+  #####
+  ## API Gateway setup
+  ##
+
+  ## gives access to dynamodb and lambda
+  APIGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+            Condition: {}
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+      Policies:
+        - PolicyName: ApiGateway
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - '*'
+
+  # Deploy to a stage with live URL
+  RestAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref RestAPIv2
+      StageName: demo
+
+  #####
+  ## The actual API
+  ##
+
+  RestAPIv2:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      EndpointConfiguration:
+        Types:
+          - REGIONAL

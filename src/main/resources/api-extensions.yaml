@@ -1,0 +1,72 @@
+paths:
+  /item/{id}:
+    get:
+      x-amazon-apigateway-integration:
+        credentials: !GetAtt APIGatewayRole.Arn
+        uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DynamoToJSON.Arn}/invocations
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "when_no_templates"
+        httpMethod: "POST"
+        type: "aws_proxy"
+    delete:
+      x-amazon-apigateway-integration:
+        credentials: !GetAtt APIGatewayRole.Arn
+        uri: !Sub "arn:aws:apigateway:${AWS::Region}:dynamodb:action/DeleteItem"
+        responses:
+          default:
+            statusCode: "200"
+            responseTemplates:
+              application/json: |-
+                { "id": "$method.request.path.id" }
+        requestTemplates:
+          application/json: !Sub |
+            {
+              "TableName": "${ItemsTable}",
+              "Key": {
+                "id": {
+                  "S": "$input.params('id')"
+                }
+              }
+            }
+        passthroughBehavior: when_no_templates
+        httpMethod: "POST"
+        type: aws
+    put:
+      x-amazon-apigateway-integration:
+        credentials: !GetAtt APIGatewayRole.Arn
+        uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DynamoJSONUpdate.Arn}/invocations
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "when_no_templates"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /item/:
+    post:
+      x-amazon-apigateway-request-validator: "Validate body"
+      x-amazon-apigateway-integration:
+        credentials: !GetAtt APIGatewayRole.Arn
+        uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SaveToDynamo.Arn}/invocations
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "when_no_templates"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /items/:
+    get:
+      x-amazon-apigateway-integration:
+        credentials: !GetAtt APIGatewayRole.Arn
+        uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DynamoToJSON.Arn}/invocations
+        responses:
+          default:
+            statusCode: "200"
+        passthroughBehavior: "when_no_templates"
+        httpMethod: "POST"
+        type: "aws_proxy"
+x-amazon-apigateway-request-validators:
+  Validate body:
+    validateRequestParameters: false
+    validateRequestBody: true
