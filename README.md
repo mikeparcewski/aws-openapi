@@ -432,7 +432,7 @@ Go to http://localhost:8080 and checkout your docs and somewhat functioning mock
 
 The OpenAPITools project - https://github.com/OpenAPITools - has built on what the SmartBear - https://swagger.io/ - done to make some cool tools.  
 
-The section in the pom that you uncommented, is a maven plugin that exposes the OpenAPI Generator project - https://github.com/OpenAPITools/openapi-generator - which allows you to generate client libraries, server stubs, documentation and more for a variety of languages and platforms.
+The `-Poas` at the end of the previous mvn command, executes a maven plugin that exposes the OpenAPI Generator project - https://github.com/OpenAPITools/openapi-generator - which allows you to generate client libraries, server stubs, documentation and more for a variety of languages and platforms.
 
 We generated a Spring Reactor shell, the code for which you can find at [src/main/java/io/github/mikeparcewski/demos/awsoas/generated](src/main/java/io/github/mikeparcewski/demos/awsoas/generated).  The shell pretty much contains all the plumbing.  All you really need to do implement, is...
 
