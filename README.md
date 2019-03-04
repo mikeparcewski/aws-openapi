@@ -146,7 +146,7 @@ In addition to writing an OpenAPI spec, we also write acceptance tests (BDD).  L
   alternative - https://39gzfyhlv9.execute-api.us-west-1.amazonaws.com/demo/items
   ```
 * Now open src/test/resources/application.conf and take "host" from the command above (just the URL part) and put it where it says USEAST1 below.  Then take the "alternative" output from above and replace the USWEST1 location as shown below.
-  ```json
+  ```scala
   bddcore {
   
     request {
