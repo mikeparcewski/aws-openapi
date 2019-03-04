@@ -129,95 +129,141 @@
 
   </dependencies>
 
-  <build>
+  <profiles>
 
-    <plugins>
+    <profile>
 
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.7.0</version>
-        <configuration>
-          <source>${java.version}</source>
-          <target>${java.version}</target>
-          <annotationProcessorPaths>
-            <path>
-              <groupId>org.mapstruct</groupId>
-              <artifactId>mapstruct-processor</artifactId>
-              <version>${org.mapstruct.version}</version>
-            </path>
-          </annotationProcessorPaths>
-        </configuration>
-      </plugin>
+      <id>default</id>
 
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>1.6.0</version>
-        <executions>
-          <execution>
-            <phase>generate-test-resources</phase>
-            <goals>
-              <goal>java</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <mainClass>io.github.mikeparcewski.demos.awsoas.utils.ConfigurationMerge</mainClass>
-          <arguments>
-            <argument>aws-resources.json</argument>
-            <argument>openapi.json</argument>
-            <argument>api-extensions.json</argument>
-          </arguments>
-        </configuration>
-      </plugin>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+        <property>
+          <name>type</name>
+          <value>aws</value>
+        </property>
+      </activation>
 
-      <!-- REMOVE ME TO GENERATE SPRING APP
+      <build>
 
-       <plugin>
-        <groupId>org.openapitools</groupId>
-        <artifactId>openapi-generator-maven-plugin</artifactId>
-        <version>3.3.3</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>generate</goal>
-            </goals>
+        <plugins>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.7.0</version>
             <configuration>
-              <inputSpec>${project.basedir}/src/main/resources/openapi.yaml</inputSpec>
-              <generatorName>spring</generatorName>
-              <output>${project.basedir}/</output>
-              <configOptions>
-                <validateSpec>true</validateSpec>
-                <modelPackage>io.github.mikeparcewski.demos.awsoas.generated.models</modelPackage>
-                <apiPackage>io.github.mikeparcewski.demos.awsoas.generated.api</apiPackage>
-                <invokerPackage>io.github.mikeparcewski.demos.awsoas.generated</invokerPackage>
-                <reactive>true</reactive>
-                <useOptional>true</useOptional>
-                <delegatePattern>true</delegatePattern>
-              </configOptions>
+              <source>${java.version}</source>
+              <target>${java.version}</target>
+              <annotationProcessorPaths>
+                <path>
+                  <groupId>org.mapstruct</groupId>
+                  <artifactId>mapstruct-processor</artifactId>
+                  <version>${org.mapstruct.version}</version>
+                </path>
+              </annotationProcessorPaths>
             </configuration>
-          </execution>
-        </executions>
-      </plugin>
+          </plugin>
 
-      REMOVE ME TO GENERATE SPRING APP -->
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>1.6.0</version>
+            <executions>
+              <execution>
+                <phase>generate-test-resources</phase>
+                <goals>
+                  <goal>java</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <mainClass>io.github.mikeparcewski.demos.awsoas.utils.ConfigurationMerge</mainClass>
+              <arguments>
+                <argument>aws-resources.json</argument>
+                <argument>openapi.json</argument>
+                <argument>api-extensions.json</argument>
+              </arguments>
+            </configuration>
+          </plugin>
 
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <goals>
-              <goal>repackage</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
+        </plugins>
 
-    </plugins>
+      </build>
 
-  </build>
+    </profile>
+
+    <profile>
+
+      <id>oas</id>
+
+      <build>
+
+        <plugins>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.7.0</version>
+            <configuration>
+              <source>${java.version}</source>
+              <target>${java.version}</target>
+              <annotationProcessorPaths>
+                <path>
+                  <groupId>org.mapstruct</groupId>
+                  <artifactId>mapstruct-processor</artifactId>
+                  <version>${org.mapstruct.version}</version>
+                </path>
+              </annotationProcessorPaths>
+            </configuration>
+          </plugin>
+
+           <plugin>
+            <groupId>org.openapitools</groupId>
+            <artifactId>openapi-generator-maven-plugin</artifactId>
+            <version>3.3.3</version>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>generate</goal>
+                </goals>
+                <configuration>
+                  <inputSpec>${project.basedir}/src/main/resources/openapi.yaml</inputSpec>
+                  <generatorName>spring</generatorName>
+                  <output>${project.basedir}/</output>
+                  <configOptions>
+                    <validateSpec>true</validateSpec>
+                    <modelPackage>io.github.mikeparcewski.demos.awsoas.generated.models</modelPackage>
+                    <apiPackage>io.github.mikeparcewski.demos.awsoas.generated.api</apiPackage>
+                    <invokerPackage>io.github.mikeparcewski.demos.awsoas.generated</invokerPackage>
+                    <reactive>true</reactive>
+                    <useOptional>true</useOptional>
+                    <delegatePattern>true</delegatePattern>
+                  </configOptions>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>repackage</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+        </plugins>
+
+      </build>
+
+    </profile>
+
+  </profiles>
+
 
 
 </project>

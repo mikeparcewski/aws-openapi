@@ -408,13 +408,13 @@ If you look in the logs directory after the tests are executed, you'll find a "c
 
 What if we didn't want a simple NodeJS lambda backing our API, but instead wanted a Reactive JAVA application.  
 
-That's easy!
+That's easy!  Just type...
 
-* Open pom.xml
-* Remove the two lines that say "REMOVE ME TO GENERATE SPRING APP"
-* Back in the console type `mvn spring-boot:run`
+```
+mvn clean spring-boot:run -Poas
+```
 
-When you see...
+and when you see...
 
 ```sbtshell
   .   ____          _            __ _ _
