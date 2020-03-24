@@ -176,13 +176,12 @@ Resources:
           'use strict';
 
           var AWS = require('aws-sdk'),
-          uuid = require('uuid'),
           documentClient = new AWS.DynamoDB.DocumentClient();
 
           exports.handler = function(event, context, callback){
 
             var json = JSON.parse(event.body);
-            json.id = uuid.v1();
+            json.id = context.awsRequestId;
 
             var params = {
               Item : json,
@@ -206,7 +205,7 @@ Resources:
 
             });
           }
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
 
   ## transforms DynamoDB json to normal JSON
   DynamoToJSON:
@@ -256,7 +255,7 @@ Resources:
 
             });
           }
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
 
   ## handles update of fields
   DynamoJSONUpdate:
@@ -345,7 +344,7 @@ Resources:
 
             return ret;
           }
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
 
   ## handles update of fields
   HandleDynamoEvent:
@@ -381,7 +380,7 @@ Resources:
             );
 
           };
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
 
   ## create the SNS topic the lambda will publish to
   ChangeEventTopic:
